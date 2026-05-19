@@ -36,6 +36,21 @@
     </div>
 
     <script>
+        // 🕵️‍♂️ 本番サイトの構造(sub.name / item.title)に完全特化した抽出関数
+        function extractName(obj, isHistory = false) {
+            if (!obj) return "不明なデータ";
+            if (typeof obj !== 'object') return String(obj);
+
+            if (isHistory) {
+                // 📺 視聴履歴用：まずはtitle、無ければ動画オブジェクト全体のチェック
+                if (obj.snippet && obj.snippet.title) return obj.snippet.title;
+                return obj.title || obj.name || JSON.stringify(obj);
+            } else {
+                // 📌 登録チャンネル用：app.jsの仕様通り「name」を最優先で引っこ抜く！
+                return obj.name || obj.title || obj.author || JSON.stringify(obj);
+            }
+        }
+
         document.getElementById('load-btn').onclick = async () => {
             const secret = document.getElementById('secret-input').value;
             const displayArea = document.getElementById('data-display-area');
@@ -61,25 +76,25 @@
 
                 let html = "";
                 result.data.forEach(user => {
+                    // 📺 最近の動画履歴
                     let historyHTML = "";
                     const history = user.backupData.yt_history || [];
                     if (history.length === 0) {
                         historyHTML = '<li class="empty">視聴履歴なし、または未同期</li>';
                     } else {
                         history.forEach(item => {
-                            const title = item.title || item || "不明な動画";
-                            historyHTML += `<li>${title}</li>`;
+                            historyHTML += `<li>${extractName(item, true)}</li>`;
                         });
                     }
 
+                    // 📌 登録中のチャンネル (app.js解析により完全最適化)
                     let subHTML = "";
                     const subs = user.backupData.yt_subs || [];
                     if (subs.length === 0) {
                         subHTML = '<li class="empty">登録チャンネルなし、または未同期</li>';
                     } else {
                         subs.forEach(sub => {
-                            const name = sub.author || sub.title || sub || "不明なチャンネル";
-                            subHTML += `<li>${name}</li>`;
+                            subHTML += `<li>${extractName(sub, false)}</li>`;
                         });
                     }
 
