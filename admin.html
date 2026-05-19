@@ -12,10 +12,12 @@
         input { background: #2a2a2a; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px; width: 200px; }
         button { background: #4CAF50; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         button:hover { background: #45a049; }
-        .user-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-        .user-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a2a; padding-bottom: 8px; margin-bottom: 10px; }
+        .user-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; position: relative; }
+        .user-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a2a; padding-bottom: 8px; margin-bottom: 10px; padding-right: 140px; }
         .username { font-size: 18px; color: #2196F3; }
         .pass-hash { font-size: 11px; color: #666; font-family: monospace; }
+        .delete-btn { position: absolute; top: 15px; right: 15px; background: #ff5252; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .delete-btn:hover { background: #e04040; }
         .section-title { font-size: 13px; color: #aaa; margin: 10px 0 5px 0; font-weight: bold; }
         ul { margin: 0; padding-left: 20px; max-height: 150px; overflow-y: auto; background: #222; padding: 10px; border-radius: 4px; list-style-type: square; }
         li { font-size: 13px; color: #ccc; margin-bottom: 4px; }
@@ -24,7 +26,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🛠️ Googlo サーバーデータ確認パネル（独立デバッグ版）</h1>
+        <h1>🛠️ Googlo サーバーデータ確認パネル（削除機能付き）</h1>
         
         <div class="auth-box">
             <label for="secret-input">管理者の合言葉: </label>
@@ -36,22 +38,20 @@
     </div>
 
     <script>
-        // 🕵️‍♂️ 本番サイトの構造(sub.name / item.title)に完全特化した抽出関数
         function extractName(obj, isHistory = false) {
             if (!obj) return "不明なデータ";
             if (typeof obj !== 'object') return String(obj);
 
             if (isHistory) {
-                // 📺 視聴履歴用：まずはtitle、無ければ動画オブジェクト全体のチェック
                 if (obj.snippet && obj.snippet.title) return obj.snippet.title;
                 return obj.title || obj.name || JSON.stringify(obj);
             } else {
-                // 📌 登録チャンネル用：app.jsの仕様通り「name」を最優先で引っこ抜く！
                 return obj.name || obj.title || obj.author || JSON.stringify(obj);
             }
         }
 
-        document.getElementById('load-btn').onclick = async () => {
+        // 📋 データをサーバーから読み込んで描画する関数
+        async function loadServerData() {
             const secret = document.getElementById('secret-input').value;
             const displayArea = document.getElementById('data-display-area');
             displayArea.innerHTML = "<p>読み込み中...</p>";
@@ -76,7 +76,6 @@
 
                 let html = "";
                 result.data.forEach(user => {
-                    // 📺 最近の動画履歴
                     let historyHTML = "";
                     const history = user.backupData.yt_history || [];
                     if (history.length === 0) {
@@ -87,7 +86,6 @@
                         });
                     }
 
-                    // 📌 登録中のチャンネル (app.js解析により完全最適化)
                     let subHTML = "";
                     const subs = user.backupData.yt_subs || [];
                     if (subs.length === 0) {
@@ -100,6 +98,7 @@
 
                     html += `
                         <div class="user-card">
+                            <button class="delete-btn" onclick="deleteUser('${user.username}')">❌ アカウント削除</button>
                             <div class="user-header">
                                 <div class="username">👤 ユーザー名: <strong>${user.username}</strong></div>
                                 <div class="pass-hash">暗号化パスワード: ${user.passwordHash}</div>
@@ -119,7 +118,37 @@
             } catch (e) {
                 displayArea.innerHTML = `<p style="color:#ff5252;">通信エラーが発生しました</p>`;
             }
-        };
+        }
+
+        // 🗑️ 特定のユーザーを削除する関数
+        async function deleteUser(username) {
+            const secret = document.getElementById('secret-input').value;
+            
+            if (!confirm(`⚠️ 本当にユーザー「${username}」をサーバーから完全に削除しますか？\nこの操作は取り消せません。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret, action: 'delete', usernameToDelete: username })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    loadServerData(); // 削除完了後、一覧を自動で再読み込み
+                } else {
+                    alert(`削除失敗: ${result.error}`);
+                }
+            } catch (e) {
+                alert("削除通信中にエラーが発生しました");
+            }
+        }
+
+        // ボタンのクリックイベント紐付け
+        document.getElementById('load-btn').onclick = loadServerData;
     </script>
 </body>
 </html>
